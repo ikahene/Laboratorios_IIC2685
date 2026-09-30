@@ -72,7 +72,7 @@ class Move_turtle( Node ):
     x_0, y_0, yaw_0 = self.pose_actual
     x_1, y_1, yaw_1 = goal_pose
 
-    yaw_actual = y_0
+    yaw_actual = yaw_0
     dis_horizontal = abs(x_1 - x_0)
     t_horizontal = dis_horizontal/self.vel_lin
     dis_vertical = abs(y_1 - y_0)
@@ -109,9 +109,9 @@ class Move_turtle( Node ):
       lista_comandos.append(((self.vel_lin, 0.0, t_horizontal)))
 
     #5. Dejamos el robot con su yaw final
-    giro_final = self.comando_giro(yaw_actual - y_1)
+    giro_final = self.comando_giro(yaw_actual, yaw_1)
     if (giro_final[2] != 0):
-      lista_comandos.append((self.comando_giro(y_0, y_1)))
+      lista_comandos.append(giro_final)
 
     return lista_comandos
 
@@ -124,6 +124,10 @@ class Move_turtle( Node ):
 
     #Asumimos que llegamos a destino
     self.pose_actual = goal_pose
+
+    #Agregamos unas lineas para nos avise cuando llegó a destino
+    x, y, yaw = goal_pose
+    self.get_logger().info( f'Llegué a la pose estimada: x={x:.2f}, y={y:.2f}, yaw={yaw:.2f}' )
 
   def accion_mover_cb(self, msg):
     for goal_pose in msg.poses:

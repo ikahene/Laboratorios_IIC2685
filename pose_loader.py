@@ -1,70 +1,75 @@
+#!/usr/bin/env python3
+
 import rclpy
 import os
+import time
 from tf_transformations import quaternion_from_euler
 from rclpy.node import Node
 from geometry_msgs.msg import PoseArray, Pose
 
 
-class Pose(Node):
+class Client(Node):
   def __init__( self):
     super().__init__( 'pose_loader' )
-    #Nodo comunica goal list
+    #El nodo publica la lista de poses hacia nuestro nodo principal
     self.goals_pub = self.create_publisher( PoseArray, 'goal_list', 10 )
 
+    #Ruta 
+    ruta_default = os.path.expanduser( '~/iic2685_ws/src/lab1/lab1/poses.txt' )
+    self.declare_parameter( 'ruta', ruta_default )
+
   def determinar_ruta(self):
-    ruta_default = "~/iic2685_ws/src/lab1_pkg/lab1_pkg/poses.txt"
+    #Verificar que todo esté bien con la ruta 
+    ruta = os.path.expanduser( self.get_parameter( 'ruta' ).value )
 
-    if os.path.exists(ruta_default):
-      return ruta_default
+    if os.path.exists(ruta):
+      return ruta
     else:
-      return self.get_logger().info( 'No existe la ruta' )
-
+      return None
 
   def leer_txt(self):
-    #Identificamos la ruta 
-    msg_goal_list = PoseArray() 
+    #Creamos el pose array vacío e iniciamos la ruta
+    msg_goal_list = PoseArray()
     ruta = self.determinar_ruta()
 
-    #Abrimos y comenzamos a leer 
+    #Abrimos y analizamos cada linea, transformándola en pose
     with open(ruta, 'r') as poses:
       for pose in poses:
-        #Quitamos el salto de linea
-        pose = pose.strip()
+        valores = pose.replace( ',', ' ' ).split()
+        if len(valores) < 3:
+          continue
 
-        #Asignamos los valores
-        x = float(pose[0])
-        y = float(pose[1])
-        yaw = float(pose[2])
+        x = float(valores[0])
+        y = float(valores[1])
+        yaw = float(valores[2])
 
         P = Pose()
-
-        #Mapeamos a las poses
         P.position.x = x
         P.position.y = y
         P.position.z = 0.0
 
-        #Usamos la transformación de euler a quaternion para el yaw
+        #pasamos el yaw a quaternion para crear la pose
         quaternion = quaternion_from_euler( 0.0, 0.0, yaw )
         P.orientation.x = quaternion[0]
         P.orientation.y = quaternion[1]
         P.orientation.z = quaternion[2]
         P.orientation.w = quaternion[3]
 
-        #Añadimos la pose creada al array
+        #añadimos la pose al array
         msg_goal_list.poses.append(P)
-      
-    #Finalmente publicamos la lista
-    while self.goals_pub.get_subscription_count() == 0:
-      self.get_logger().info( 'Esperando conexión' )
 
+    #Agregamos esto, para sólo mandar una vez este el nav conectado
+    while self.goals_pub.get_subscription_count() == 0:
+      time.sleep( 0.5 )
+
+    #Finalmente publicamos
     self.goals_pub.publish( msg_goal_list )
 
 
 def main(args=None):
   rclpy.init()
-  Nodo_cliente = Pose()
+  Nodo_cliente = Client()
 
-  #LLamamos para leer el txt
   Nodo_cliente.leer_txt()
   rclpy.spin(Nodo_cliente)
 
