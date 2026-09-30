@@ -1,7 +1,8 @@
 import rclpy
 import os
+from tf_transformations import quaternion_from_euler
 from rclpy.node import Node
-from geometry_msgs.msg import PoseArray
+from geometry_msgs.msg import PoseArray, Pose
 
 
 class Pose(Node):
@@ -11,24 +12,13 @@ class Pose(Node):
     self.goals_pub = self.create_publisher( PoseArray, 'goal_list', 10 )
 
   def determinar_ruta(self):
-    ruta_default = "/home/ikahene/iic2685_ws/src/lab1_pkg/lab1_pkg/poses.txt"
-    #pedimos una ruta en caso de tener otro tipo de archivo
-    print("Presiona ENTER sin escribir nada para usar la ruta por defecto.")
-    respuesta = input("Ingresa la ruta absoluta del txt: ")
+    ruta_default = "~/iic2685_ws/src/lab1_pkg/lab1_pkg/poses.txt"
 
-    #Si no se ingresa nada se usa el archivo local
-    if respuesta == "":
-      self.get_logger().info("Usando ruta por defecto...")
-      ruta_final = ruta_default
-    #Si se ingresa algo verificamos que exista y seguimos
+    if os.path.exists(ruta_default):
+      return ruta_default
     else:
-      self.get_logger().info("Usando ruta ingresada por el usuario...")
-      if os.path.exists(respuesta):
-        ruta_final = respuesta
-      else:
-        ruta_final = ruta_default
+      return self.get_logger().info( 'No existe la ruta' )
 
-    return ruta_final
 
   def leer_txt(self):
     #Identificamos la ruta 
@@ -53,25 +43,33 @@ class Pose(Node):
         P.position.y = y
         P.position.z = 0.0
 
-        P.orientation.x = 0.0
-        P.orientation.y = 0.0
-        P.orientation.z = yaw
-        P.orientation.w = 1.0
+        #Usamos la transformación de euler a quaternion para el yaw
+        quaternion = quaternion_from_euler( 0.0, 0.0, yaw )
+        P.orientation.x = quaternion[0]
+        P.orientation.y = quaternion[1]
+        P.orientation.z = quaternion[2]
+        P.orientation.w = quaternion[3]
 
         #Añadimos la pose creada al array
         msg_goal_list.poses.append(P)
       
     #Finalmente publicamos la lista
+    while self.goals_pub.get_subscription_count() == 0:
+      self.get_logger().info( 'Esperando conexión' )
+
     self.goals_pub.publish( msg_goal_list )
 
 
 def main(args=None):
   rclpy.init()
-  N = Client()
+  Nodo_cliente = Pose()
 
   #LLamamos para leer el txt
-  N.leer_txt()
-  rclpy.spin(N)
+  Nodo_cliente.leer_txt()
+  rclpy.spin(Nodo_cliente)
+
+  Nodo_cliente.destroy_node()
+  rclpy.shutdown()
 
 
 if __name__ == '__main__':

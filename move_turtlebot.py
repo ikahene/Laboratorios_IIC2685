@@ -34,29 +34,45 @@ class Move_turtle( Node ):
 
     # Revisamos y ejecutamos cada comando en la lista
     for v, w, t in speed_command_list: 
-      speed.linear.x = v
-      speed.angular.z = w    
+      speed.linear.x = float(v)
+      speed.angular.z = float(w)    
       #Consultamos tiempo actual del sistema 
       t_inicio = time.monotonic()  
       t_actual = t_inicio
       #Mandamos el mismo comando por t segundos
       while (t_actual - t_inicio) < t:
-        t_actual = time.monotonic()
         self.cmd_vel_mux_pub.publish( speed ) #Publicamos las velocidades
-        
+        time.sleep(0.05)
+        t_actual = time.monotonic()
+
+    #Publicamos uno vacío para que deje de moverse
+    self.cmd_vel_mux_pub.publish( Twist() )
+
+  #Función auxiliar para crear los comandos con velocidad angular  
   def comando_giro(self, yaw_desde, yaw_hacia):
     d = yaw_hacia - yaw_desde
+    #Buscamos el giro mas corto, para ello comparamos con pi
+    if d > pi:
+      d = d - 2*pi   
+    elif d < -pi:
+      d = d + 2*pi 
+
+    #Definimos hacia qué lado girar
     if d >= 0:
-      w = self.vel_rot 
+      w = self.vel_rot #Antihorario
     else:
       w = -self.vel_rot
     return (0.0, w, abs(d) / self.vel_rot)
 
+  #Función angular parea determinar los comandos a aplicar
   def calcular_lista_velocidades(self, goal_pose):
+    lista_comandos = []
+
     #Primero necesitamos conocer la distancias
     x_0, y_0, yaw_0 = self.pose_actual
     x_1, y_1, yaw_1 = goal_pose
 
+    yaw_actual = y_0
     dis_horizontal = abs(x_1 - x_0)
     t_horizontal = dis_horizontal/self.vel_lin
     dis_vertical = abs(y_1 - y_0)
@@ -65,36 +81,39 @@ class Move_turtle( Node ):
     #Primero nos movemos verticalmente 
     if y_0 < y_1: 
       #1. orientamos hacia arriba el robot
-      c1 = self.comando_giro(y_0, pi/2)
-      y_0 = pi/2
+      lista_comandos.append((self.comando_giro(yaw_actual, pi/2)))
+      yaw_actual = pi/2
       
-    else: 
+    elif y_0 > y_1: 
       #1. orientamos hacia abajo el robot
-      c1 = self.comando_giro(y_0, -pi/2)
-      y_0 = -pi/2
+      lista_comandos.append((self.comando_giro(yaw_actual, -pi/2)))
+      yaw_actual = -pi/2
 
     #2. Avanzamos 
-    c2 = (self.vel_lin, 0.0, t_vertical)
+    if dis_vertical != 0.0:
+      lista_comandos.append(((self.vel_lin, 0.0, t_vertical)))
     
     #Ahora nos movemos horizontalmente
     if x_0 < x_1:
       #3. Orientamos el robot hacia la derecha
-      c3 = self.comando_giro(y_0, 0.0)
-      y_0 = 0.0
+      lista_comandos.append((self.comando_giro(yaw_actual, 0.0)))
+      yaw_actual = 0.0
 
-    else:
+    elif x_0 > x_1:
       #3. Orientamos el robot hacia la izquierda
-      c3 = self.comando_giro(y_0, pi)
-      y_0 = pi
+      lista_comandos.append((self.comando_giro(yaw_actual, pi)))
+      yaw_actual = pi
 
     #4. Avanzamos horizontalmente
-    c4 = (self.vel_lin, 0.0, t_horizontal)
+    if dis_horizontal != 0.0:
+      lista_comandos.append(((self.vel_lin, 0.0, t_horizontal)))
 
     #5. Dejamos el robot con su yaw final
-    c5 = self.comando_giro(y_0, y_1)
-    self.pose_actual = goal_pose
+    giro_final = self.comando_giro(yaw_actual - y_1)
+    if (giro_final[2] != 0):
+      lista_comandos.append((self.comando_giro(y_0, y_1)))
 
-    return [c1, c2, c3, c4, c5]
+    return lista_comandos
 
   def mover_robot_a_destino(self, goal_pose):
     #Llamamos a la función para crear a lista
@@ -103,15 +122,33 @@ class Move_turtle( Node ):
     #Luego se itera sobre la lista 
     self.aplicar_velocidad(speed_command_list)
 
+    #Asumimos que llegamos a destino
+    self.pose_actual = goal_pose
+
   def accion_mover_cb(self, msg):
-    for goal_pose in msg:
-      self.mover_robot_a_destino(goal_pose)
+    for goal_pose in msg.poses:
+      #Extraemos de la pose lo que necesitamos
+      x = goal_pose.position.x
+      y = goal_pose.position.y
+      quat = goal_pose.orientation
+ 
+      #Pasamos el cuaternion a Euler 
+      roll, pitch, yaw = euler_from_quaternion( [quat.x, 
+                                                 quat.y, 
+                                                 quat.z, 
+                                                 quat.w] )
+
+
+      self.mover_robot_a_destino((x, y, yaw))
 
 def main(args= None):
   rclpy.init()
+
   Nodo_principal = Move_turtle()
-  Move_turtle.poses_sub()
-  rclpy.spin(N)
+  rclpy.spin(Nodo_principal)
+
+  Nodo_principal.destroy_node()
+  rclpy.shutdown()
     
 
 if __name__ == '__main__':
