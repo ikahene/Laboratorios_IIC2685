@@ -25,28 +25,30 @@ class Move_turtle( Node ):
     #Velocidades constantes
     self.vel_lin = 0.2 #[m/s]
     self.vel_rot = 1.0 #[rad/s]
+    self.factor_giro = 1.111311640184305
+    self.get_logger().info(f"Factor de giro en ejecución: {self.factor_giro}")
 
   #Recibe y aplica las velocidades al robot
-  def aplicar_velocidad( self, speed_command_list : list):
-
-    #Creamos el twist vacío
+  def aplicar_velocidad(self, speed_command_list: list):
     speed = Twist()
 
-    # Revisamos y ejecutamos cada comando en la lista
-    for v, w, t in speed_command_list: 
+    for v, w, t in speed_command_list:
       speed.linear.x = float(v)
-      speed.angular.z = float(w)    
-      #Consultamos tiempo actual del sistema 
-      t_inicio = time.monotonic()  
-      t_actual = t_inicio
-      #Mandamos el mismo comando por t segundos
-      while (t_actual - t_inicio) < t:
-        self.cmd_vel_mux_pub.publish( speed ) #Publicamos las velocidades
-        time.sleep(0.05)
-        t_actual = time.monotonic()
+      speed.angular.z = float(w)
 
-    #Publicamos uno vacío para que deje de moverse
-    self.cmd_vel_mux_pub.publish( Twist() )
+      t_fin = time.monotonic() + t
+
+      while rclpy.ok():
+        restante = t_fin - time.monotonic()
+
+        if restante <= 0.0:
+          break
+
+        self.cmd_vel_mux_pub.publish(speed)
+        time.sleep(min(0.05, restante))
+
+    # Detener el robot al terminar la lista.
+    self.cmd_vel_mux_pub.publish(Twist())
 
   #Función auxiliar para crear los comandos con velocidad angular  
   def comando_giro(self, yaw_desde, yaw_hacia):
@@ -57,12 +59,16 @@ class Move_turtle( Node ):
     elif d < -pi:
       d = d + 2*pi 
 
+    # Ignorar diferencias pequeñas producidas por 1.57 y 3.14.
+    if abs(d) < 0.005:
+        return (0.0, 0.0, 0.0)
+
     #Definimos hacia qué lado girar
     if d >= 0:
       w = self.vel_rot #Antihorario
     else:
       w = -self.vel_rot
-    return (0.0, w, abs(d) / self.vel_rot)
+    return (0.0, w, abs(d) / self.vel_rot*self.factor_giro)
 
   #Función angular parea determinar los comandos a aplicar
   def calcular_lista_velocidades(self, goal_pose):
