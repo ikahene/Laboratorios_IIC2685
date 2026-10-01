@@ -1,0 +1,21 @@
+<launch>
+
+  <!-- Archivo de poses y factor de corrección configurables desde la terminal -->
+  <arg name="ruta" default="$(find-pkg-share lab1)/config/cuadrado.txt" />
+  <arg name="factor_giro" default="1.111311640184305" />
+
+  <include file="$(find-pkg-share very_simple_robot_simulator)/launch/run_all.xml" />
+
+  <node pkg="lab1" exec="dead_reckoning_nav" output="screen">
+    <param name="factor_giro" value="$(var factor_giro)" />
+  </node>
+
+  <!-- Se espera 3 s para que el simulador y el nav ya se hayan descubierto en DDS;
+       si no, se pierde el primer segundo de comandos y el primer tramo queda corto -->
+  <timer period="3.0">
+    <node pkg="lab1" exec="pose_loader" output="screen">
+      <param name="ruta" value="$(var ruta)" />
+    </node>
+  </timer>
+
+</launch>
