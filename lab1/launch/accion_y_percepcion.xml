@@ -1,0 +1,18 @@
+<launch>
+  <!-- Nodos del simulador -->
+  <node pkg="very_simple_robot_simulator" exec="kobuki_simulator.py" name="kobuki_simulator"/>
+  <node pkg="very_simple_robot_simulator" exec="lidar_simulator" name="lidar_simulator"/>
+  <node pkg="very_simple_robot_simulator" exec="kinect_simulator.py" name="kinect_simulator">
+    <remap from="map" to="/world_map"/>
+  </node>
+  <node pkg="very_simple_robot_simulator" exec="world_state_gui.py" name="world_state_gui"/>
+
+  <!-- Nodos de tu paquete -->
+  <node pkg="lab1" exec="obstacle_detector" name="obstacle_detector" output="screen"/>
+  <node pkg="lab1" exec="dead_reckoning_nav" name="dead_reckoning_nav" output="screen"/>
+  <timer period="3.0">
+    <node pkg="lab1" exec="pose_loader" name="pose_loader" output="screen">
+      <param name="ruta" value="$(find-pkg-share lab1)/config/cuadrado.txt"/>
+    </node>
+  </timer>
+</launch>
