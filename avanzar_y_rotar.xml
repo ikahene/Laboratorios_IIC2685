@@ -1,0 +1,11 @@
+<launch>
+
+  <include file="$(find-pkg-share very_simple_robot_simulator)/launch/run_all.xml" />
+
+  <node pkg="lab1" exec="dead_reckoning_nav" output="screen" />
+
+  <node pkg="lab1" exec="pose_loader" output="screen">
+    <param name="ruta" value="/home/oscarmnz/lab1_ws/src/lab1/lab1/poses.txt" />
+  </node>
+
+</launch>
